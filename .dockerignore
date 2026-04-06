@@ -1,0 +1,21 @@
+# Docker Build Context Ignore List
+.git
+.gitignore
+.env
+Dockerfile
+docker-compose.yml
+nginx/
+
+# Binaries
+main
+main.exe
+bin/
+
+# Temporary files
+/tmp/
+.gemini/
+.idea/
+.vscode/
+
+# Logs
+*.log
