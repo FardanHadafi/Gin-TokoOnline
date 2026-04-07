@@ -9,6 +9,21 @@ servers:
     description: Production Proxy via Nginx
 
 paths:
+  /csrf-token:
+    get:
+      operationId: getCsrfToken
+      tags: [Auth]
+      summary: Dapatkan token CSRF untuk request POST/PATCH/DELETE
+      responses:
+        "200":
+          description: Token berhasil didapatkan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrf_token: { type: string }
+
   /products:
     get:
       operationId: getProducts
@@ -48,6 +63,8 @@ paths:
       operationId: checkoutOrder
       tags: [Public]
       summary: Checkout belanjaan (Guest Checkout)
+      security:
+        - CsrfToken: []
       requestBody:
         required: true
         content:
@@ -81,6 +98,8 @@ paths:
       operationId: adminLogin
       tags: [Auth]
       summary: Login Admin (Stateful Session)
+      security:
+        - CsrfToken: []
       requestBody:
         required: true
         content:
@@ -106,6 +125,7 @@ paths:
       summary: Logout Admin (Redis Invalidation)
       security:
         - BearerAuth: []
+        - CsrfToken: []
       responses:
         "200":
           description: Logout berhasil
@@ -116,6 +136,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       summary: Upload gambar ke Cloudinary
       requestBody:
         content:
@@ -142,6 +163,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       summary: Tambah produk baru
       requestBody:
         required: true
@@ -159,6 +181,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       parameters:
         - name: id
           in: path
@@ -177,6 +200,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       parameters:
         - name: id
           in: path
@@ -205,6 +229,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       requestBody:
         content:
           application/json:
@@ -243,6 +268,7 @@ paths:
       tags: [Admin]
       security:
         - BearerAuth: []
+        - CsrfToken: []
       requestBody:
         content:
           application/json:
@@ -257,6 +283,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    CsrfToken:
+      type: apiKey
+      name: X-CSRF-Token
+      in: header
 
   schemas:
     Product:
@@ -267,9 +297,11 @@ components:
         slug: { type: string }
         description: { type: string }
         price: { type: number }
+        stock: { type: integer }
         category_id: { type: string, format: uuid }
         is_active: { type: boolean }
         image_url: { type: string }
+        category: { $ref: "#/components/schemas/Category" }
 
     Category:
       type: object
@@ -277,17 +309,35 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
 
+    OrderItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        quantity: { type: integer }
+        price: { type: number }
+        product: { $ref: "#/components/schemas/Product" }
+
     Order:
       type: object
       properties:
         id: { type: string, format: uuid }
         order_number: { type: string }
         customer_name: { type: string }
+        customer_email: { type: string }
+        customer_phone: { type: string }
+        shipping_address: { type: string }
         total_amount: { type: number }
         status: { type: string }
+        note: { type: string }
         whatsapp_url: { type: string }
         snap_token: { type: string }
         snap_redirect_url: { type: string }
+        payment_type: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
 
     LoginResponse:
       type: object

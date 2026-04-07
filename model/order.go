@@ -26,11 +26,9 @@ type Order struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
-
-
 func (o *Order) BeforeCreate(tx *gorm.DB) (err error) {
 	if o.ID == uuid.Nil {
 		o.ID = uuid.New()
 	}
 	return
-}
+}
