@@ -32,12 +32,29 @@ services:
       - redis
     networks:
       - toko-network
+
   redis:
     image: redis:7-alpine
     container_name: toko_redis
     command: redis-server --save 60 1 --loglevel warning
     volumes:
       - redis_data:/data
+    networks:
+      - toko-network
+
+  # Ngrok tunnel — exposes local backend to the internet
+  # This allows Midtrans webhook to reach localhost
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok_tunnel
+    restart: unless-stopped
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command: http nginx:80 --log stdout
+    ports:
+      - "4040:4040" # Ngrok web inspector (view public URL here)
+    depends_on:
+      - nginx
     networks:
       - toko-network
 

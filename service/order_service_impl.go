@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/midtrans/midtrans-go"
 	"github.com/midtrans/midtrans-go/snap"
+	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -26,6 +27,7 @@ type OrderServiceImpl struct {
 	productRepo repository.ProductRepository
 	logger      *slog.Logger
 	snapClient  snap.Client
+	redis       *redis.Client
 }
 
 func NewOrderService(
@@ -33,15 +35,24 @@ func NewOrderService(
 	repo repository.OrderRepository,
 	productRepo repository.ProductRepository,
 	logger *slog.Logger,
+	redisClient *redis.Client,
 ) OrderService {
-	client := snap.Client{}
-	
+	var client snap.Client
+	serverKey := os.Getenv("MIDTRANS_SERVER_KEY")
+	if serverKey != "" {
+		client.New(serverKey, midtrans.Sandbox)
+		logger.Info("Midtrans SNAP client initialized")
+	} else {
+		logger.Warn("MIDTRANS_SERVER_KEY not set, payment features disabled")
+	}
+
 	return &OrderServiceImpl{
 		db:          db,
 		repo:        repo,
 		productRepo: productRepo,
 		logger:      logger,
 		snapClient:  client,
+		redis:       redisClient,
 	}
 }
 
@@ -51,6 +62,8 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 	var order model.Order
 	var totalAmount decimal.Decimal
 
+	productMap := make(map[uuid.UUID]model.Product)
+	
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		order = model.Order{
 			CustomerName:    req.CustomerName,
@@ -71,9 +84,18 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 				return &config.ApiError{Status: 400, Title: "Bad Request", Detail: "Product out of stock or inactive: " + product.Name}
 			}
 
+			result := tx.Model(&model.Product{}).Where("id = ? AND stock >= ?", product.ID, itemReq.Quantity).
+				Update("stock", gorm.Expr("stock - ?", itemReq.Quantity))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return &config.ApiError{Status: 400, Title: "Bad Request", Detail: "Stok tidak mencukupi: " + product.Name}
+			}
+
 			itemTotal := product.Price.Mul(decimal.NewFromInt(int64(itemReq.Quantity)))
 			totalAmount = totalAmount.Add(itemTotal)
-
+			productMap[product.ID] = product
 			order.Items = append(order.Items, model.OrderItem{
 				ProductID: product.ID,
 				Quantity:  itemReq.Quantity,
@@ -83,12 +105,26 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 
 		order.TotalAmount = totalAmount
 
-		if err := tx.Create(&order).Error; err != nil {
+		if err := tx.Omit("Items.Product").Create(&order).Error; err != nil {
 			return err
 		}
 
 		return nil
 	})
+
+	if err == nil {
+		s.clearProductCache(ctx)
+	}
+
+
+	// After successful DB save, attach product data for the response mapper
+	if err == nil {
+		for i := range order.Items {
+			if p, ok := productMap[order.Items[i].ProductID]; ok {
+				order.Items[i].Product = p
+			}
+		}
+	}
 
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Checkout failed in transaction", "error", err)
@@ -98,26 +134,32 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 		return dto.OrderResponse{}, &config.ApiError{Status: 500, Title: "Internal Error", Detail: err.Error()}
 	}
 
-	s.logger.InfoContext(ctx, "Generating Midtrans SNAP token", "order_id", order.ID)
-	snapReq := &snap.Request{
-		TransactionDetails: midtrans.TransactionDetails{
-			OrderID:  order.OrderNumber,
-			GrossAmt: order.TotalAmount.IntPart(),
-		},
-		CustomerDetail: &midtrans.CustomerDetails{
-			FName: order.CustomerName,
-			Email: order.CustomerEmail,
-			Phone: order.CustomerPhone,
-		},
-	}
+	// Only attempt Midtrans if the server key was configured
+	serverKey := os.Getenv("MIDTRANS_SERVER_KEY")
+	if serverKey != "" {
+		s.logger.InfoContext(ctx, "Generating Midtrans SNAP token", "order_id", order.ID)
+		snapReq := &snap.Request{
+			TransactionDetails: midtrans.TransactionDetails{
+				OrderID:  order.OrderNumber,
+				GrossAmt: order.TotalAmount.IntPart(),
+			},
+			CustomerDetail: &midtrans.CustomerDetails{
+				FName: order.CustomerName,
+				Email: order.CustomerEmail,
+				Phone: order.CustomerPhone,
+			},
+		}
 
-	snapResp, snapErr := s.snapClient.CreateTransaction(snapReq)
-	if snapErr == nil {
-		_ = s.repo.UpdatePaymentInfo(ctx, order.ID, snapResp.Token, snapResp.RedirectURL)
-		order.SnapToken = snapResp.Token
-		order.SnapRedirectURL = snapResp.RedirectURL
+		snapResp, snapErr := s.snapClient.CreateTransaction(snapReq)
+		if snapErr == nil {
+			_ = s.repo.UpdatePaymentInfo(ctx, order.ID, snapResp.Token, snapResp.RedirectURL)
+			order.SnapToken = snapResp.Token
+			order.SnapRedirectURL = snapResp.RedirectURL
+		} else {
+			s.logger.WarnContext(ctx, "Failed to generate Midtrans SNAP token", "error", snapErr)
+		}
 	} else {
-		s.logger.WarnContext(ctx, "Failed to generate Midtrans SNAP token", "error", snapErr)
+		s.logger.WarnContext(ctx, "Skipping Midtrans — server key not configured")
 	}
 
 	return s.mapToResponse(order), nil
@@ -148,6 +190,13 @@ func (s *OrderServiceImpl) UpdateStatus(ctx context.Context, id uuid.UUID, statu
 		return dto.OrderResponse{}, err
 	}
 	return s.FindByID(ctx, id)
+}
+
+func (s *OrderServiceImpl) clearProductCache(ctx context.Context) {
+	if s.redis != nil {
+		s.redis.Del(ctx, ProductCacheKey)
+		s.logger.InfoContext(ctx, "Cleared product cache due to stock change")
+	}
 }
 
 func (s *OrderServiceImpl) mapToResponse(o model.Order) dto.OrderResponse {
@@ -232,10 +281,30 @@ func (s *OrderServiceImpl) HandleMidtransWebhook(ctx context.Context, payload ma
 		status = "unknown"
 	}
 
-	err = s.db.WithContext(ctx).Model(&model.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
-		"status":       status,
-		"payment_type": paymentType,
-	}).Error
+	// Use a transaction to update status and restore stock if needed
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update order status and payment type
+		if err := tx.Model(&model.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
+			"status":       status,
+			"payment_type": paymentType,
+		}).Error; err != nil {
+			return err
+		}
+
+		// Restore stock when payment fails/expires/cancelled
+		if (status == "failed") && order.Status == "pending" {
+			s.logger.InfoContext(ctx, "Restoring stock for cancelled/expired order", "order_id", order.ID)
+			for _, item := range order.Items {
+				if err := tx.Model(&model.Product{}).Where("id = ?", item.ProductID).
+					Update("stock", gorm.Expr("stock + ?", item.Quantity)).Error; err != nil {
+					return err
+				}
+			}
+			s.clearProductCache(ctx)
+		}
+
+		return nil
+	})
 
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update order status from webhook", "error", err)

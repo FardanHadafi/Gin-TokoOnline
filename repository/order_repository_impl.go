@@ -34,7 +34,7 @@ func (r *OrderRepositoryImpl) FindByID(ctx context.Context, id uuid.UUID) (model
 
 func (r *OrderRepositoryImpl) FindByOrderNumber(ctx context.Context, orderNumber string) (model.Order, error) {
 	var order model.Order
-	err := r.db.WithContext(ctx).First(&order, "order_number = ?", orderNumber).Error
+	err := r.db.WithContext(ctx).Preload("Items").First(&order, "order_number = ?", orderNumber).Error
 	return order, err
 }
 

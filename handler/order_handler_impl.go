@@ -21,7 +21,11 @@ func NewOrderHandler(svc service.OrderService) OrderHandler {
 func (h *OrderHandlerImpl) Checkout(c *gin.Context) {
 	var req dto.CheckoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.NewErrorResponse(c, err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": 400,
+			"title":  "Validation Error",
+			"detail": err.Error(),
+		})
 		return
 	}
 

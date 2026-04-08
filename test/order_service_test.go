@@ -20,7 +20,7 @@ func TestOrderService_FindAll(t *testing.T) {
 	prodRepo := new(mocks.ProductRepositoryMock)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	
-	svc := service.NewOrderService(nil, repo, prodRepo, logger)
+	svc := service.NewOrderService(nil, repo, prodRepo, logger, nil)
 
 	ctx := context.Background()
 	orders := []model.Order{
@@ -42,7 +42,7 @@ func TestOrderService_FindByID(t *testing.T) {
 	prodRepo := new(mocks.ProductRepositoryMock)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	
-	svc := service.NewOrderService(nil, repo, prodRepo, logger)
+	svc := service.NewOrderService(nil, repo, prodRepo, logger, nil)
 
 	ctx := context.Background()
 	id := uuid.New()
@@ -66,7 +66,7 @@ func TestOrderService_MapToResponse_WhatsAppURL(t *testing.T) {
 	os.Setenv("ADMIN_WHATSAPP", "628123456789")
 	defer os.Unsetenv("ADMIN_WHATSAPP")
 
-	svc := service.NewOrderService(nil, repo, prodRepo, logger).(*service.OrderServiceImpl)
+	svc := service.NewOrderService(nil, repo, prodRepo, logger, nil).(*service.OrderServiceImpl)
 
 	id := uuid.New()
 	order := model.Order{

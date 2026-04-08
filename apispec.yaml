@@ -78,6 +78,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
+        "400":
+          description: Stok tidak mencukupi atau data tidak valid
 
   /webhook/midtrans:
     post:
@@ -88,7 +90,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/MidtransWebhookPayload"
       responses:
         "200":
           description: Webhook diterima
@@ -213,9 +215,7 @@ paths:
   /categories:
     get:
       operationId: getCategories
-      tags: [Admin]
-      security:
-        - BearerAuth: []
+      tags: [Admin, Public]
       responses:
         "200":
           description: Daftar kategori
@@ -257,9 +257,7 @@ paths:
   /settings:
     get:
       operationId: getSettings
-      tags: [Admin]
-      security:
-        - BearerAuth: []
+      tags: [Admin, Public]
       responses:
         "200":
           description: Pengaturan toko
@@ -339,6 +337,16 @@ components:
           type: array
           items: { $ref: "#/components/schemas/OrderItem" }
 
+    MidtransWebhookPayload:
+      type: object
+      properties:
+        transaction_status: { type: string, enum: [capture, settlement, pending, deny, cancel, expire] }
+        fraud_status: { type: string }
+        transaction_id: { type: string }
+        order_id: { type: string, description: "Order Number in our system" }
+        gross_amount: { type: string }
+        payment_type: { type: string }
+
     LoginResponse:
       type: object
       properties:
@@ -391,9 +399,10 @@ components:
         shipping_address: { type: string }
         items:
           type: array
+          minItems: 1
           items:
             type: object
             required: [product_id, quantity]
             properties:
               product_id: { type: string, format: uuid }
-              quantity: { type: integer }
+              quantity: { type: integer, minimum: 1 }

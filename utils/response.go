@@ -27,9 +27,9 @@ func NewErrorResponse(c *gin.Context, err error) {
 		return
 	}
 
-	c.JSON(http.StatusInternalServerError, config.ApiError{
-		Status: http.StatusInternalServerError,
-		Title:  "Internal Server Error",
+	c.JSON(http.StatusBadRequest, config.ApiError{
+		Status: http.StatusBadRequest,
+		Title:  "Bad Request",
 		Detail: err.Error(),
 	})
 }
