@@ -242,6 +242,7 @@ func (s *OrderServiceImpl) mapToResponse(o model.Order) dto.OrderResponse {
 		PaymentType:     o.PaymentType,
 		Items:           items,
 		WhatsAppURL:     whatsappURL,
+		CreatedAt:       o.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -281,9 +282,7 @@ func (s *OrderServiceImpl) HandleMidtransWebhook(ctx context.Context, payload ma
 		status = "unknown"
 	}
 
-	// Use a transaction to update status and restore stock if needed
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Update order status and payment type
 		if err := tx.Model(&model.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
 			"status":       status,
 			"payment_type": paymentType,
@@ -291,7 +290,6 @@ func (s *OrderServiceImpl) HandleMidtransWebhook(ctx context.Context, payload ma
 			return err
 		}
 
-		// Restore stock when payment fails/expires/cancelled
 		if (status == "failed") && order.Status == "pending" {
 			s.logger.InfoContext(ctx, "Restoring stock for cancelled/expired order", "order_id", order.ID)
 			for _, item := range order.Items {

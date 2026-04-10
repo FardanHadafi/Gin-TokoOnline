@@ -29,6 +29,7 @@ type OrderResponse struct {
 	PaymentType     string              `json:"payment_type"`
 	Items           []OrderItemResponse `json:"items"`
 	WhatsAppURL     string              `json:"whatsapp_url"`
+	CreatedAt       string              `json:"created_at"`
 }
 
 type CheckoutItemRequest struct {
