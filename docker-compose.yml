@@ -45,7 +45,7 @@ services:
   # Ngrok tunnel — exposes local backend to the internet
   # This allows Midtrans webhook to reach localhost
   ngrok:
-    image: ngrok/ngrok:latest
+    image: ngrok/ngrok:alpine
     container_name: ngrok_tunnel
     restart: unless-stopped
     environment:
