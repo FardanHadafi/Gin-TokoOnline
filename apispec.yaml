@@ -2,7 +2,7 @@ openapi: 3.1.1
 info:
   title: Kontrak Api Toko Online
   description: Dokumentasi backend e-commerce Toko-Online dengan integrasi Redis, Cloudinary, dan Midtrans.
-  version: 1.0.0
+  version: 1.1.0
 
 servers:
   - url: http://localhost/api
@@ -38,6 +38,22 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      summary: Tambah produk baru
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddProductRequest"
+      responses:
+        "201":
+          description: Produk dibuat
 
   /products/{id}:
     get:
@@ -57,6 +73,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+    patch:
+      operationId: updateProduct
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: Produk diperbarui
+    delete:
+      operationId: deleteProduct
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Produk dihapus
 
   /checkout:
     post:
@@ -159,63 +208,11 @@ paths:
                 properties:
                   url: { type: string }
 
-  /admin/products:
-    post:
-      operationId: createProduct
-      tags: [Admin]
-      security:
-        - BearerAuth: []
-        - CsrfToken: []
-      summary: Tambah produk baru
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddProductRequest"
-      responses:
-        "201":
-          description: Produk dibuat
-
-  /admin/products/{id}:
-    patch:
-      operationId: updateProduct
-      tags: [Admin]
-      security:
-        - BearerAuth: []
-        - CsrfToken: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateProductRequest"
-      responses:
-        "200":
-          description: Produk diperbarui
-    delete:
-      operationId: deleteProduct
-      tags: [Admin]
-      security:
-        - BearerAuth: []
-        - CsrfToken: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Produk dihapus
-
   /categories:
     get:
       operationId: getCategories
       tags: [Admin, Public]
+      summary: Daftar semua kategori
       responses:
         "200":
           description: Daftar kategori
@@ -230,6 +227,7 @@ paths:
       security:
         - BearerAuth: []
         - CsrfToken: []
+      summary: Tambah kategori baru
       requestBody:
         content:
           application/json:
@@ -237,6 +235,42 @@ paths:
       responses:
         "201":
           description: Kategori dibuat
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      summary: Update kategori berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCategoryRequest" }
+      responses:
+        "200":
+          description: Kategori diperbarui
+    delete:
+      operationId: deleteCategory
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      summary: Hapus kategori berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Kategori dihapus
 
   /orders:
     get:
@@ -254,19 +288,88 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Order" }
 
+  /orders/{id}:
+    get:
+      operationId: getOrderByID
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      summary: Detail pesanan berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Pesanan ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /profile/{id}:
+    get:
+      operationId: getProfile
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      summary: Dapatkan profil admin berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Profil ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateProfile
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+        - CsrfToken: []
+      summary: Update profil admin berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200":
+          description: Profil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
   /settings:
     get:
       operationId: getSettings
       tags: [Admin, Public]
+      summary: Dapatkan pengaturan toko
       responses:
         "200":
           description: Pengaturan toko
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingResponse"
     patch:
       operationId: updateSettings
       tags: [Admin]
       security:
         - BearerAuth: []
         - CsrfToken: []
+      summary: Update pengaturan toko
       requestBody:
         content:
           application/json:
@@ -274,6 +377,10 @@ paths:
       responses:
         "200":
           description: Pengaturan diupdate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingResponse"
 
 components:
   securitySchemes:
@@ -333,9 +440,17 @@ components:
         snap_token: { type: string }
         snap_redirect_url: { type: string }
         payment_type: { type: string }
+        created_at: { type: string, format: date-time }
         items:
           type: array
           items: { $ref: "#/components/schemas/OrderItem" }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        name: { type: string }
 
     MidtransWebhookPayload:
       type: object
@@ -352,11 +467,16 @@ components:
       properties:
         token: { type: string }
         user:
-          type: object
-          properties:
-            id: { type: string, format: uuid }
-            username: { type: string }
-            name: { type: string }
+          $ref: "#/components/schemas/User"
+
+    SettingResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        store_name: { type: string }
+        whatsapp_number: { type: string }
+        address_info: { type: string }
+        welcome_message: { type: string }
 
     AddProductRequest:
       type: object
@@ -367,13 +487,18 @@ components:
         category_id: { type: string, format: uuid }
         description: { type: string }
         stock: { type: integer }
+        image_url: { type: string }
+        is_active: { type: boolean }
 
     UpdateProductRequest:
       type: object
       properties:
         name: { type: string }
+        category_id: { type: string, format: uuid }
+        description: { type: string }
         price: { type: number }
         stock: { type: integer }
+        image_url: { type: string }
         is_active: { type: boolean }
 
     UpdateCategoryRequest:
@@ -388,6 +513,14 @@ components:
         store_name: { type: string }
         whatsapp_number: { type: string }
         address_info: { type: string }
+        welcome_message: { type: string }
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        username: { type: string }
+        name: { type: string }
+        password: { type: string }
 
     CheckoutRequest:
       type: object
@@ -397,6 +530,7 @@ components:
         customer_email: { type: string }
         customer_phone: { type: string }
         shipping_address: { type: string }
+        note: { type: string }
         items:
           type: array
           minItems: 1
