@@ -18,13 +18,13 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 
 func (r *ProductRepositoryImpl) FindAll(ctx context.Context) ([]model.Product, error) {
 	var products []model.Product
-	err := r.db.WithContext(ctx).Preload("Category").Find(&products).Error
+	err := r.db.WithContext(ctx).Preload("Category").Preload("Images").Find(&products).Error
 	return products, err
 }
 
 func (r *ProductRepositoryImpl) FindByID(ctx context.Context, id uuid.UUID) (model.Product, error) {
 	var product model.Product
-	err := r.db.WithContext(ctx).Preload("Category").First(&product, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Category").Preload("Images").First(&product, "id = ?", id).Error
 	return product, err
 }
 
@@ -33,7 +33,7 @@ func (r *ProductRepositoryImpl) Create(ctx context.Context, product *model.Produ
 }
 
 func (r *ProductRepositoryImpl) Update(ctx context.Context, product *model.Product) error {
-	return r.db.WithContext(ctx).Model(product).Updates(product).Error
+	return r.db.WithContext(ctx).Session(&gorm.Session{FullSaveAssociations: true}).Save(product).Error
 }
 
 func (r *ProductRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
@@ -42,6 +42,35 @@ func (r *ProductRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error 
 
 func (r *ProductRepositoryImpl) FindByCategoryID(ctx context.Context, categoryID uuid.UUID) ([]model.Product, error) {
 	var products []model.Product
-	err := r.db.WithContext(ctx).Where("category_id = ?", categoryID).Find(&products).Error
+	err := r.db.WithContext(ctx).Preload("Category").Preload("Images").Where("category_id = ?", categoryID).Find(&products).Error
 	return products, err
+}
+func (r *ProductRepositoryImpl) FindByCategoryIDUnscoped(ctx context.Context, categoryID uuid.UUID) ([]model.Product, error) {
+	var products []model.Product
+	err := r.db.WithContext(ctx).Unscoped().Where("category_id = ?", categoryID).Find(&products).Error
+	return products, err
+}
+
+func (r *ProductRepositoryImpl) HardDeleteByCategoryID(ctx context.Context, categoryID uuid.UUID) error {
+	var productIDs []uuid.UUID
+	if err := r.db.WithContext(ctx).Unscoped().Model(&model.Product{}).
+		Where("category_id = ?", categoryID).
+		Pluck("id", &productIDs).Error; err != nil {
+		return err
+	}
+
+	if len(productIDs) == 0 {
+		return nil
+	}
+
+	if err := r.db.WithContext(ctx).Where("product_id IN ?", productIDs).
+		Delete(&model.ProductImage{}).Error; err != nil {
+		return err
+	}
+
+	if err := r.db.WithContext(ctx).Exec(
+		"UPDATE order_items SET product_id = NULL WHERE product_id IN ?", productIDs,
+	).Error; err != nil {}
+
+	return r.db.WithContext(ctx).Unscoped().Where("category_id = ?", categoryID).Delete(&model.Product{}).Error
 }

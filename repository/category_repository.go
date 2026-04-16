@@ -13,4 +13,5 @@ type CategoryRepository interface {
 	Create(ctx context.Context, category *model.Category) error
 	Update(ctx context.Context, category *model.Category) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	CountProductsByCategory(ctx context.Context) (map[uuid.UUID]int, error)
 }

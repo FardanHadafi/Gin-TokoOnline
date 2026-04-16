@@ -40,8 +40,8 @@ func main() {
 
 	r := router.SetupRouter(db, logger)
 
-	logger.Info("Starting server on port 3000")
-	if err := r.Run(":3000"); err != nil {
+	logger.Info("Starting server on port 8080")
+	if err := r.Run(":8080"); err != nil {
 		logger.Error("Failed to start server", "error", err)
 	}
 }

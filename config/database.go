@@ -32,6 +32,7 @@ func NewDatabase(log *slog.Logger) *gorm.DB {
 		&model.Order{},
 		&model.OrderItem{},
 		&model.Product{},
+		&model.ProductImage{},
 		&model.User{},
 		&model.Setting{},
 	)

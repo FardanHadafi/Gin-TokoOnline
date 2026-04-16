@@ -5,11 +5,11 @@ import (
 	"Toko-Online/dto"
 	"Toko-Online/model"
 	"Toko-Online/repository"
+	"Toko-Online/utils"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,14 +114,22 @@ func (s *ProductServiceImpl) Create(ctx context.Context, req dto.AddProductReque
 		return dto.ProductResponse{}, &config.ApiError{Status: 400, Title: "Bad Request", Detail: "Invalid category"}
 	}
 
+	var images []model.ProductImage
+	for _, url := range req.Images {
+		if url != "" {
+			images = append(images, model.ProductImage{URL: url})
+		}
+	}
+
 	product := &model.Product{
 		Name:        req.Name,
-		Slug:        generateSlug(req.Name),
+		Slug:        utils.GenerateSlug(req.Name),
 		Description: req.Description,
 		Price:       req.Price,
 		Stock:       req.Stock,
 		CategoryID:  req.CategoryID,
 		ImageUrl:    req.ImageUrl,
+		Images:      images,
 		IsActive:    req.IsActive,
 	}
 
@@ -147,7 +155,7 @@ func (s *ProductServiceImpl) Update(ctx context.Context, id uuid.UUID, req dto.U
 	}
 	if req.Name != "" {
 		product.Name = req.Name
-		product.Slug = generateSlug(req.Name)
+		product.Slug = utils.GenerateSlug(req.Name)
 	}
 	if req.Description != "" {
 		product.Description = req.Description
@@ -162,6 +170,17 @@ func (s *ProductServiceImpl) Update(ctx context.Context, id uuid.UUID, req dto.U
 		product.ImageUrl = req.ImageUrl
 	}
 	product.IsActive = req.IsActive
+
+	var newImages []model.ProductImage
+	for _, url := range req.Images {
+		if url != "" {
+			newImages = append(newImages, model.ProductImage{
+				ProductID: product.ID,
+				URL:       url,
+			})
+		}
+	}
+	product.Images = newImages
 
 	if err := s.repo.Update(ctx, &product); err != nil {
 		return dto.ProductResponse{}, err
@@ -239,19 +258,25 @@ func (s *ProductServiceImpl) clearCache(ctx context.Context, categoryID string) 
 }
 
 func (s *ProductServiceImpl) mapToResponse(p model.Product) dto.ProductResponse {
+	var images []string
+	for _, img := range p.Images {
+		images = append(images, img.URL)
+	}
+
 	return dto.ProductResponse{
-		ID:          p.ID,
-		CategoryID:  p.CategoryID,
-		Name:        p.Name,
-		Slug:        p.Slug,
-		Description: p.Description,
-		Price:       p.Price,
-		Stock:       p.Stock,
-		ImageUrl:    p.ImageUrl,
-		IsActive:    p.IsActive,
+		ID:           p.ID,
+		CategoryID:   p.CategoryID,
+		Name:         p.Name,
+		Slug:         p.Slug,
+		Description:  p.Description,
+		Price:        p.Price,
+		Stock:        p.Stock,
+		ImageUrl:     p.ImageUrl,
+		Images:       images,
+		CategoryName: p.Category.Name,
+		CategorySlug: p.Category.Slug,
+		IsActive:     p.IsActive,
 	}
 }
 
-func generateSlug(name string) string {
-	return strings.ToLower(strings.Join(strings.Fields(name), "-"))
-}
+

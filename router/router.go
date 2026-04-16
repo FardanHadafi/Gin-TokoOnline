@@ -15,7 +15,6 @@ import (
 	"github.com/gin-contrib/secure"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
-	redis_sessions "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -43,16 +42,6 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 	}))
 
 	// 3. Session Store
-	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" {
-		redisHost = "redis"
-	}
-	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" {
-		redisPort = "6379"
-	}
-	redisAddr := redisHost + ":" + redisPort
-
 	sessionOptions := sessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
@@ -61,17 +50,9 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 		SameSite: http.SameSiteStrictMode,
 	}
 
-	store, err := redis_sessions.NewStore(10, "tcp", redisAddr, os.Getenv("REDIS_PASSWORD"), os.Getenv("JWT_SECRET"))
-	if err != nil {
-		logger.Error("Failed to initialize Redis session store, falling back to CookieStore", "error", err)
-		fallbackStore := cookie.NewStore([]byte(os.Getenv("JWT_SECRET")))
-		fallbackStore.Options(sessionOptions)
-		r.Use(sessions.Sessions("toko_session", fallbackStore))
-	} else {
-		logger.Info("Successfully initialized Redis session store")
-		store.Options(sessionOptions)
-		r.Use(sessions.Sessions("toko_session", store))
-	}
+	store := cookie.NewStore([]byte(os.Getenv("JWT_SECRET")))
+	store.Options(sessionOptions)
+	r.Use(sessions.Sessions("toko_session", store))
 
 	// 0. Initialize External Clients
 	redisClient := config.NewRedisClient(logger)
@@ -85,7 +66,7 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 	settingRepo := repository.NewSettingRepository(db)
 
 	// 2. Initialize Services
-	categoryService := service.NewCategoryService(categoryRepo, logger, redisClient)
+	categoryService := service.NewCategoryService(categoryRepo, productRepo, logger, redisClient)
 	productService := service.NewProductService(productRepo, categoryRepo, logger, redisClient)
 	orderService := service.NewOrderService(db, orderRepo, productRepo, logger, redisClient)
 	userService := service.NewUserService(userRepo, logger, redisClient)
@@ -109,8 +90,9 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 		api.GET("/products", productHandler.FindAll)
 		api.POST("/checkout", orderHandler.Checkout)
 		api.GET("/products/:id", productHandler.FindByID)
+		api.GET("/categories", categoryHandler.FindAll)
 
-		// HIDDEN ADMIN LOGIN ROUTE (ACCESSIBLE VIA MANUAL URL)
+
 		api.POST("/admin/login", userHandler.Login)
 
 		admin := api.Group("/")
@@ -128,7 +110,6 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 			admin.DELETE("/products/:id", productHandler.Delete)
 			
 			// Categories
-			admin.GET("/categories", categoryHandler.FindAll)
 			admin.POST("/categories", categoryHandler.Create)
 			admin.PATCH("/categories/:id", categoryHandler.Update)
 			admin.DELETE("/categories/:id", categoryHandler.Delete)
@@ -144,6 +125,7 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
 			// Orders (Dashboard)
 			admin.GET("/orders", orderHandler.FindAll)
 			admin.GET("/orders/:id", orderHandler.FindByID)
+			admin.PATCH("/orders/:id/cancel", orderHandler.Cancel)
 		}
 	}
 

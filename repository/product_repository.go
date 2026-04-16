@@ -14,4 +14,6 @@ type ProductRepository interface {
 	Update(ctx context.Context, product *model.Product) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByCategoryID(ctx context.Context, categoryID uuid.UUID) ([]model.Product, error)
+	FindByCategoryIDUnscoped(ctx context.Context, categoryID uuid.UUID) ([]model.Product, error)
+	HardDeleteByCategoryID(ctx context.Context, categoryID uuid.UUID) error
 }

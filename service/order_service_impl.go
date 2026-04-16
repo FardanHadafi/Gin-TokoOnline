@@ -116,8 +116,6 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 		s.clearProductCache(ctx)
 	}
 
-
-	// After successful DB save, attach product data for the response mapper
 	if err == nil {
 		for i := range order.Items {
 			if p, ok := productMap[order.Items[i].ProductID]; ok {
@@ -134,7 +132,6 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 		return dto.OrderResponse{}, &config.ApiError{Status: 500, Title: "Internal Error", Detail: err.Error()}
 	}
 
-	// Only attempt Midtrans if the server key was configured
 	serverKey := os.Getenv("MIDTRANS_SERVER_KEY")
 	if serverKey != "" {
 		s.logger.InfoContext(ctx, "Generating Midtrans SNAP token", "order_id", order.ID)
@@ -147,6 +144,10 @@ func (s *OrderServiceImpl) Checkout(ctx context.Context, req dto.CheckoutRequest
 				FName: order.CustomerName,
 				Email: order.CustomerEmail,
 				Phone: order.CustomerPhone,
+			},
+			Expiry: &snap.ExpiryDetails{
+				Unit:     "minutes",
+				Duration: 30,
 			},
 		}
 
@@ -283,22 +284,29 @@ func (s *OrderServiceImpl) HandleMidtransWebhook(ctx context.Context, payload ma
 	}
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
-			"status":       status,
-			"payment_type": paymentType,
-		}).Error; err != nil {
+		var currentOrder model.Order
+		if err := tx.Where("id = ?", order.ID).Preload("Items").First(&currentOrder).Error; err != nil {
 			return err
 		}
 
-		if (status == "failed") && order.Status == "pending" {
-			s.logger.InfoContext(ctx, "Restoring stock for cancelled/expired order", "order_id", order.ID)
-			for _, item := range order.Items {
-				if err := tx.Model(&model.Product{}).Where("id = ?", item.ProductID).
-					Update("stock", gorm.Expr("stock + ?", item.Quantity)).Error; err != nil {
-					return err
-				}
+		if currentOrder.Status != "success" && currentOrder.Status != "failed" {
+			if err := tx.Model(&model.Order{}).Where("id = ?", currentOrder.ID).Updates(map[string]interface{}{
+				"status":       status,
+				"payment_type": paymentType,
+			}).Error; err != nil {
+				return err
 			}
-			s.clearProductCache(ctx)
+
+			if status == "failed" && currentOrder.Status == "pending" {
+				s.logger.InfoContext(ctx, "Restoring stock for terminal failure", "order_id", currentOrder.ID, "reason", transactionStatus)
+				for _, item := range currentOrder.Items {
+					if err := tx.Model(&model.Product{}).Where("id = ?", item.ProductID).
+						Update("stock", gorm.Expr("stock + ?", item.Quantity)).Error; err != nil {
+						return err
+					}
+				}
+				s.clearProductCache(ctx)
+			}
 		}
 
 		return nil
@@ -309,6 +317,39 @@ func (s *OrderServiceImpl) HandleMidtransWebhook(ctx context.Context, payload ma
 		return &config.ApiError{Status: http.StatusInternalServerError, Title: "Internal Error", Detail: "Failed to update order status"}
 	}
 
-	s.logger.InfoContext(ctx, "Successfully updated order from webhook", "order_id", order.ID, "status", status)
+	s.logger.InfoContext(ctx, "Successfully processed Midtrans webhook", "order_id", order.ID, "status", status)
 	return nil
+}
+
+func (s *OrderServiceImpl) CancelOrder(ctx context.Context, id uuid.UUID) error {
+	s.logger.InfoContext(ctx, "Manual order cancellation requested", "order_id", id)
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var order model.Order
+		if err := tx.Where("id = ?", id).Preload("Items").First(&order).Error; err != nil {
+			return &config.ApiError{Status: 404, Title: "Not Found", Detail: "Order not found"}
+		}
+
+		if order.Status != "pending" {
+			return &config.ApiError{
+				Status: 400,
+				Title:  "Bad Request",
+				Detail: "Only pending orders can be cancelled",
+			}
+		}
+
+		if err := tx.Model(&model.Order{}).Where("id = ?", order.ID).Update("status", "failed").Error; err != nil {
+			return err
+		}
+
+		for _, item := range order.Items {
+			if err := tx.Model(&model.Product{}).Where("id = ?", item.ProductID).
+				Update("stock", gorm.Expr("stock + ?", item.Quantity)).Error; err != nil {
+				return err
+			}
+		}
+
+		s.clearProductCache(ctx)
+		return nil
+	})
 }

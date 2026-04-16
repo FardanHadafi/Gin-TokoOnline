@@ -36,7 +36,7 @@ func (s *UploadServiceImpl) UploadFile(ctx context.Context, fileHeader *multipar
 	defer file.Close()
 
 	resp, err := s.cloudinary.Upload.Upload(ctx, file, uploader.UploadParams{
-		Folder: "toko-online/products",
+		Folder: "toko-online/uploads",
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to upload to Cloudinary", "error", err)

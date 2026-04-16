@@ -2,7 +2,7 @@ openapi: 3.1.1
 info:
   title: Kontrak Api Toko Online
   description: Dokumentasi backend e-commerce Toko-Online dengan integrasi Redis, Cloudinary, dan Midtrans.
-  version: 1.1.0
+  version: 1.2.0
 
 servers:
   - url: http://localhost/api
@@ -211,11 +211,11 @@ paths:
   /categories:
     get:
       operationId: getCategories
-      tags: [Admin, Public]
-      summary: Daftar semua kategori
+      tags: [Public]
+      summary: Daftar semua kategori (Melalui Cache)
       responses:
         "200":
-          description: Daftar kategori
+          description: Daftar kategori dengan jumlah produk
           content:
             application/json:
               schema:
@@ -307,6 +307,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
+    patch:
+      operationId: cancelOrder
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      summary: Batalkan pesanan dan kembalikan stok (Admin Only)
+      responses:
+        "200":
+          description: Pesanan dibatalkan
 
   /profile/{id}:
     get:
@@ -406,13 +415,26 @@ components:
         category_id: { type: string, format: uuid }
         is_active: { type: boolean }
         image_url: { type: string }
+        images:
+          type: array
+          items: { $ref: "#/components/schemas/ProductImage" }
         category: { $ref: "#/components/schemas/Category" }
+
+    ProductImage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        url: { type: string }
 
     Category:
       type: object
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        slug: { type: string }
+        image_url: { type: string }
+        product_count: { type: integer }
 
     OrderItem:
       type: object
@@ -506,6 +528,7 @@ components:
       required: [name]
       properties:
         name: { type: string }
+        image_url: { type: string }
 
     UpdateSettingRequest:
       type: object

@@ -24,26 +24,12 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_WHATSAPP=${ADMIN_WHATSAPP}
       - CLOUDINARY_URL=${CLOUDINARY_URL}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      - UPSTASH_REDIS_REST_URL=${UPSTASH_REDIS_REST_URL}
+      - UPSTASH_REDIS_REST_TOKEN=${UPSTASH_REDIS_REST_TOKEN}
+      - REDIS_URL=${REDIS_URL}
       - PUBLIC_URL=${PUBLIC_URL}
-    depends_on:
-      - redis
     networks:
       - toko-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: toko_redis
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis_data:/data
-    networks:
-      - toko-network
-
-  # Ngrok tunnel — exposes local backend to the internet
-  # This allows Midtrans webhook to reach localhost
   ngrok:
     image: ngrok/ngrok:alpine
     container_name: ngrok_tunnel
@@ -52,7 +38,7 @@ services:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     command: http nginx:80 --log stdout
     ports:
-      - "4040:4040" # Ngrok web inspector (view public URL here)
+      - "4040:4040"
     depends_on:
       - nginx
     networks:
@@ -61,6 +47,3 @@ services:
 networks:
   toko-network:
     driver: bridge
-
-volumes:
-  redis_data:

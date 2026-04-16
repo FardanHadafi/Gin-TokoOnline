@@ -19,9 +19,23 @@ type Product struct {
 	Stock       int             `gorm:"default:0" json:"stock" validate:"gte=0"`
 	IsActive    bool            `gorm:"default:true" json:"is_active"`
 	ImageUrl    string          `json:"image_url"`
+	Images      []ProductImage  `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE;" json:"images"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt  `gorm:"index" json:"-"`
+}
+
+type ProductImage struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	ProductID uuid.UUID `gorm:"type:uuid;index" json:"product_id"`
+	URL       string    `json:"url"`
+}
+
+func (pi *ProductImage) BeforeCreate(tx *gorm.DB) (err error) {
+	if pi.ID == uuid.Nil {
+		pi.ID = uuid.New()
+	}
+	return
 }
 
 

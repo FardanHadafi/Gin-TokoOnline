@@ -75,3 +75,18 @@ func (h *OrderHandlerImpl) FindByID(c *gin.Context) {
 	}
 	utils.NewSuccessResponse(c, http.StatusOK, "Order found", order)
 }
+
+func (h *OrderHandlerImpl) Cancel(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		utils.NewErrorResponse(c, err)
+		return
+	}
+
+	if err := h.svc.CancelOrder(c.Request.Context(), id); err != nil {
+		utils.NewErrorResponse(c, err)
+		return
+	}
+	utils.NewSuccessResponse(c, http.StatusOK, "Order cancelled and stock restored", nil)
+}

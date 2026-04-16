@@ -6,5 +6,6 @@ type OrderHandler interface {
 	Checkout(c *gin.Context)
 	FindAll(c *gin.Context)
 	FindByID(c *gin.Context)
+	Cancel(c *gin.Context)
 	Webhook(c *gin.Context)
 }
