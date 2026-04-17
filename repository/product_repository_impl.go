@@ -33,7 +33,12 @@ func (r *ProductRepositoryImpl) Create(ctx context.Context, product *model.Produ
 }
 
 func (r *ProductRepositoryImpl) Update(ctx context.Context, product *model.Product) error {
-	return r.db.WithContext(ctx).Session(&gorm.Session{FullSaveAssociations: true}).Save(product).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(product).Association("Images").Replace(product.Images); err != nil {
+			return err
+		}
+		return tx.Session(&gorm.Session{FullSaveAssociations: false}).Save(product).Error
+	})
 }
 
 func (r *ProductRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
