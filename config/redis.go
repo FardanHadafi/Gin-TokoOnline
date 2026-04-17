@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -22,7 +23,10 @@ func NewRedisClient(log *slog.Logger) *redis.Client {
 		return nil
 	}
 
-	if opt.TLSConfig == nil {
+	useSSL := os.Getenv("REDIS_SSL") == "true" || 
+		(opt.Addr != "" && strings.Contains(opt.Addr, "upstash.io"))
+
+	if useSSL && opt.TLSConfig == nil {
 		opt.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}
